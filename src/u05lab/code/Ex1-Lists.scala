@@ -1,3 +1,4 @@
+
 package u05lab.code
 
 import scala.annotation.tailrec
@@ -37,7 +38,11 @@ sealed trait List[A] {
 
   def reduce(op: (A,A)=>A): A
 
+  def length(): Int
+
   def takeRight(n: Int): List[A]
+
+  def collect[B](f: PartialFunction[A, B]): List[B]
 
   // right-associative construction: 10 :: 20 :: 30 :: Nil()
   def ::(head: A): List[A] = Cons(head,this)
@@ -46,7 +51,8 @@ sealed trait List[A] {
 // defining concrete implementations based on the same template
 
 case class Cons[A](_head: A, _tail: List[A])
-  extends ListImplementation[A]
+  extends ListImplementation[A] {
+}
 
 case class Nil[A]()
   extends ListImplementation[A]
@@ -64,11 +70,11 @@ object :: {
 trait ListImplementation[A] extends List[A] {
 
   override def head: Option[A] = this match {
-    case h :: t => Some(h)
+    case h :: _ => Some(h)
     case _ => None
   }
   override def tail: Option[List[A]] = this match {
-    case h :: t => Some(t)
+    case _ :: t => Some(t)
     case _ => None
   }
   override def append(list: List[A]): List[A] = this match {
@@ -80,12 +86,12 @@ trait ListImplementation[A] extends List[A] {
     case _ => None
   }
   override def get(pos: Int): Option[A] = this match {
-    case h :: t if pos == 0 => Some(h)
-    case h :: t if pos > 0 => t get (pos-1)
+    case h :: _ if pos == 0 => Some(h)
+    case _ :: t if pos > 0 => t get (pos-1)
     case _ => None
   }
   override def filter(predicate: (A) => Boolean): List[A] = this match {
-    case h :: t if (predicate(h)) => h :: (t filter predicate)
+    case h :: t if predicate(h) => h :: (t filter predicate)
     case _ :: t => (t filter predicate)
     case _ => Nil()
   }
@@ -115,20 +121,69 @@ trait ListImplementation[A] extends List[A] {
     case Nil() => Nil()
   }
 
-  override def zipRight: List[(A,Int)] = ??? // questions: what is the type of keyword ???
+  override def zipRight: List[(A,Int)] = {
+    /*@tailrec
+    def _zipRight(l: List[A], k: Int, res: List[(A, Int)]): List[(A, Int)] = l match {
+      case h :: t => _zipRight(t, k + 1, (h, k) :: res)
+      case _ => res
+    }
+    _zipRight(this, 0, List.nil).reverse()*/
 
-  override def partition(pred: A => Boolean): (List[A],List[A]) = ???
+    //var i = -1; map((_, { i += 1; i }))
 
-  override def span(pred: A => Boolean): (List[A],List[A]) = ???
+    val i = Iterator.from(0)
+    this.map((_ ,i.next))
+  }
+
+  /*override def partition(pred: A => Boolean): (List[A], List[A]) = {
+    (filter(pred), filter(a => !pred(a)))
+  }*/
+
+  override def partition(pred: A => Boolean): (List[A], List[A]) = this.foldLeft((List[A](),List[A]())) ((acc, h)=> (acc, pred(h)) match {
+    case ((a, b), true) => (a.append(h :: Nil()), b)
+    case ((a, b), false) => (a, b.append(h:: Nil()))
+  })
+
+  override def span(pred: A => Boolean): (List[A],List[A]) = this.foldLeft((List[A](),List[A]())) ((acc, h)=> (acc, pred(h)) match {
+    case ((a, hb :: tb), _) => (a, hb :: tb.append(h :: Nil()))
+    case ((a, Nil()), true) => (a.append(h :: Nil()), Nil())
+    case ((a, Nil()), false) => (a, h :: Nil())
+  })
 
   /**
     *
     * @throws UnsupportedOperationException if the list is empty
     */
-  override def reduce(op: (A,A)=>A): A = ???
 
-  override def takeRight(n: Int): List[A] = ???
+  override def length(): Int = {
+    @tailrec
+    def _length(l: List[A], n: Int): Int = l match {
+      case _ :: Nil() => n
+      case _ :: t => _length(t, n + 1)
+      case Nil() => 0
+    }
+    _length(this, 1)
+  }
+
+
+  override def reduce(op: (A,A)=>A): A = this match {
+    case h :: Nil() => h
+    case h :: t => op(h, t.reduce(op))
+    case Nil() => throw new UnsupportedOperationException()
+  }
+
+  override def takeRight(n: Int): List[A] = this.reverse() match {
+    case h :: t if n > 0 => t.reverse().takeRight(n - 1) append (h :: Nil())
+    case _ => Nil()
+  }
+
+  override def collect[B](f: PartialFunction[A, B]): List[B] = this match {
+    case h :: t if f.isDefinedAt(h) => f(h) :: t.collect(f)
+    case _ :: t => t.collect(f)
+    case _ => Nil()
+  }
 }
+
 
 // Factories
 object List {
